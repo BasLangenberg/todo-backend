@@ -13,6 +13,7 @@ type todoitem struct {
 	Title     string `json:"title"`
 	Completed bool   `json:"completed"`
 	Url       string `json:"url"`
+	Uuid      string `json:"uuid"`
 }
 
 type server struct {
@@ -26,13 +27,32 @@ func (s *server) todoIndividualHandle() http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 
+		if r.Method == "OPTIONS" {
+			return
+		}
 		if r.Method == "GET" {
-			fmt.Printf("URI: %s", r.RequestURI)
+			fmt.Printf("URI: %s\n", r.RequestURI)
 			for i := range s.todos {
-				if s.todos[i].Url == r.RequestURI[1:] {
+				if s.todos[i].Uuid == r.RequestURI[1:] {
 					w.Header().Set("Content-Type", "Application/JSON")
 					json.NewEncoder(w).Encode(s.todos[i])
 					return
+				}
+			}
+		}
+
+		if r.Method == "PATCH" {
+			fmt.Println("HUTS")
+			for i := range s.todos {
+				if s.todos[i].Uuid == r.RequestURI[1:] {
+					var input todoitem
+					err := json.NewDecoder(r.Body).Decode(&input)
+					if err != nil {
+						http.Error(w, err.Error(), http.StatusBadRequest)
+						return
+					}
+					s.todos[i].Title = input.Title
+
 				}
 			}
 		}
@@ -64,18 +84,22 @@ func (s *server) todoHandle() http.Handler {
 				return
 			}
 
-			input.Url, err = uuid.GenerateUUID()
+			url, err := uuid.GenerateUUID()
+
+			input.Uuid = url
 
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
+			input.Url = fmt.Sprintf("http://172.20.15.135:4000/%s", url)
+
 			s.todos = append(s.todos, input)
 
 			json.NewEncoder(w).Encode(input)
 
-			s.router.Handle("/"+input.Url, s.todoIndividualHandle())
+			s.router.Handle("/"+url, s.todoIndividualHandle())
 		}
 
 		if r.Method == "DELETE" {
@@ -87,6 +111,7 @@ func (s *server) todoHandle() http.Handler {
 			w.Header().Set("Content-Type", "Application/JSON")
 			json.NewEncoder(w).Encode(s.todos)
 		}
+
 	}
 
 	return http.HandlerFunc(fn)
