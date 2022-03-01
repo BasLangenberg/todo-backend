@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httputil"
 
 	"github.com/hashicorp/go-uuid"
 )
@@ -14,6 +13,7 @@ type todoitem struct {
 	Completed bool   `json:"completed"`
 	Url       string `json:"url"`
 	Uuid      string `json:"uuid"`
+	Order     int    `json:"order"`
 }
 
 type server struct {
@@ -24,14 +24,13 @@ type server struct {
 func (s *server) todoIndividualHandle() http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, PATCH, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 
 		if r.Method == "OPTIONS" {
 			return
 		}
 		if r.Method == "GET" {
-			fmt.Printf("URI: %s\n", r.RequestURI)
 			for i := range s.todos {
 				if s.todos[i].Uuid == r.RequestURI[1:] {
 					w.Header().Set("Content-Type", "Application/JSON")
@@ -42,7 +41,6 @@ func (s *server) todoIndividualHandle() http.Handler {
 		}
 
 		if r.Method == "PATCH" {
-			fmt.Println("HUTS")
 			for i := range s.todos {
 				if s.todos[i].Uuid == r.RequestURI[1:] {
 					var input todoitem
@@ -52,7 +50,18 @@ func (s *server) todoIndividualHandle() http.Handler {
 						return
 					}
 					s.todos[i].Title = input.Title
+					s.todos[i].Completed = input.Completed
+					s.todos[i].Order = input.Order
+					json.NewEncoder(w).Encode(s.todos[i])
+				}
+			}
+		}
 
+		if r.Method == "DELETE" {
+			for i := range s.todos {
+				if s.todos[i].Uuid == r.RequestURI[1:] {
+					s.todos = append(s.todos[:i], s.todos[i+1:]...)
+					fmt.Fprint(w, "{}")
 				}
 			}
 		}
@@ -63,14 +72,8 @@ func (s *server) todoIndividualHandle() http.Handler {
 
 func (s *server) todoHandle() http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		res, err := httputil.DumpRequest(r, true)
-		if err != nil {
-			fmt.Printf("Unable to parse body: %s", err)
-		}
-		fmt.Println(string(res))
-
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, PATCH, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 		if r.Method == "OPTIONS" {
 			return // Preflight sets headers and we're done
@@ -93,7 +96,7 @@ func (s *server) todoHandle() http.Handler {
 				return
 			}
 
-			input.Url = fmt.Sprintf("http://172.20.15.135:4000/%s", url)
+			input.Url = fmt.Sprintf("http://localhost:4000/%s", url)
 
 			s.todos = append(s.todos, input)
 
